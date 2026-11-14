@@ -1,95 +1,44 @@
-import type {Request,Response} from "express";
-import {registerUser,loginUser} from "../services/auth.services.js"
-import {registerSchema,loginSchema } from "../validators/auth.validator.js"
+import type { Request, Response } from "express";
+import { registerUser, loginUser, buildSession } from "../services/auth.services.js";
+import { getAuth } from "../middleware/auth.middleware.js";
 
+export const register = async (req: Request, res: Response) => {
+    const session = await registerUser(req.body);
 
-export const register=async (req:Request,res:Response)=>{
-    try{
-
-        const result=registerSchema.safeParse(req.body);
-        if(!result.success){
-            return res.status(400).json({
-                success:false,
-                message:"Validation failed",
-                errors:result.error.issues
-            });
-        }
-
-        const {name,
-            email,
-            password,
-            phone}=result.data;
-
-            const user=await registerUser(
-                name,
-                email,
-                password,
-                phone
-            );
-        
-
-        return res.status(201).json({
-            success:true,
-            message:"User successfully registered",
-            data:user
-        });
-    }
-    catch(error){
-        console.error(error);
-        res.status(400).json({
-            success:false,
-            message: error instanceof Error
-            ? error.message
-            : "Something went wrong"
-        });
-    }
-
+    res.status(201).json({
+        success: true,
+        message: "Account and organization created",
+        data: session,
+    });
 };
 
+export const login = async (req: Request, res: Response) => {
+    const session = await loginUser(req.body);
 
-export const login=async(req:Request,res:Response)=>{
-    try{
-        const result=loginSchema.safeParse(req.body);
+    res.status(200).json({
+        success: true,
+        message: "Login successful",
+        data: session,
+    });
+};
 
-        if(!result.success){
-            return res.status(401).json({
-                success:false,
-                message:"Validation failed",
-                errors:result.error.issues
-            });
-        }
+/** Current user, role and organization, plus a fresh token. */
+export const getMe = async (req: Request, res: Response) => {
+    const auth = getAuth(req);
+    const session = await buildSession(auth.userId, auth.orgId);
 
-        const {email,password }=result.data;
-        const resultData=await loginUser(
-            email,
-            password
-        );
+    res.status(200).json({
+        success: true,
+        data: session,
+    });
+};
 
-        return res.status(200).json({
-            success:true,
-            message:"Login successful",
-            data:resultData
-        });
-    }
-    catch(error){
-        console.log("LOGIN ERROR",error);
+export const switchOrg = async (req: Request, res: Response) => {
+    const auth = getAuth(req);
+    const session = await buildSession(auth.userId, req.body.orgId);
 
-        return res.status(401).json({
-            success:false,
-            message:error instanceof Error?
-            error.message:"Login failed"
-        });
-    }
-}
-
-export const getMe=async(req:Request,res:Response)=>{
-    return res.status(200).json({
-        success:true,
-        data:{
-            userId:req.user?.userId,
-            role:req.user?.role
-
-        }
-        
-    })
-}
+    res.status(200).json({
+        success: true,
+        data: session,
+    });
+};

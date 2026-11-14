@@ -1,24 +1,19 @@
-import type {Request,Response,NextFunction} from "express";
-import {Role} from "../generated/prisma/client.js";
+import type { Request, Response, NextFunction } from "express";
+import type { OrgRole } from "../generated/prisma/client.js";
+import { AppError } from "../utils/AppError.js";
 
-export const authorise=(...allowedRoles:Role[])=>{
-    return(
-        req:Request,
-        res:Response,
-        next:NextFunction
-    )=>{
-        if(!req.user){
-            return res.status(401).json({
-                success:false,
-                message:"Authentication required"
-            });
+export const ADMIN_ROLES: readonly OrgRole[] = ["OWNER", "ADMIN"];
+
+export const isAdminRole = (role: OrgRole) => ADMIN_ROLES.includes(role);
+
+export const authorise = (...allowedRoles: OrgRole[]) => {
+    return (req: Request, _res: Response, next: NextFunction) => {
+        if (!req.auth) {
+            throw AppError.unauthorized();
         }
 
-        if(!allowedRoles.includes(req.user.role)){
-            return res.status(403).json({
-                success:false,
-                message:"You dont have permission to access this rresuorces"
-            });
+        if (!allowedRoles.includes(req.auth.role)) {
+            throw AppError.forbidden("You don't have permission to access this resource");
         }
 
         next();

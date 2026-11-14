@@ -1,474 +1,104 @@
-import type { Request,Response } from "express";
-import { acceptIssue, assignIssues, closeIssues, createIssue, getIssues, reopenIssue, resolveIssue, startIssue ,getIssueById,addIssueAttachment} from "../services/issue.services.js";
-import { assignIssueSchema, createIssueSchema } from "../validators/issue.validator.js";
-import { success } from "zod";
+import type { Request, Response } from "express";
+import {
+    addIssueAttachment,
+    assignIssue,
+    createIssue,
+    findSimilarIssues,
+    followIssue,
+    getIssueById,
+    getIssueStats,
+    listIssues,
+    markDuplicate,
+    transitionIssue,
+    unfollowIssue,
+    updateIssuePriority,
+} from "../services/issue.services.js";
+import { getSuggestions } from "../services/dispatch.service.js";
+import { addComment, listComments } from "../services/comment.service.js";
+import { getAuth } from "../middleware/auth.middleware.js";
+import { AppError } from "../utils/AppError.js";
+import type { ListIssuesQuery, IssueStatsQuery, SimilarIssuesQuery } from "../validators/issue.validator.js";
 
-export const createIssueController=async(
-    req:Request,
-    res:Response
-)=>{
-    try{
-        const result=createIssueSchema.safeParse(req.body);
+// Express 5 forwards rejected promises to the error handler, so controllers only parse, call and respond.
 
-        if(!result.success){
-            return res.status(400).json({
-                success:false,
-                message:"Validation failed",
-                error:result.error.issues
-            });
-        }
+const issueId = (req: Request) => Number(req.params.id);
 
-        if(!req.user){
-            return res.status(401).json({
-                success:false,
-                message:"Authentication failed"
-            });
-        }
-
-
-        const {
-            title,
-            description,
-            location,
-            priority
-        }=result.data;
-
-        const issue=await createIssue(
-            title,
-            description,
-            location,
-            priority,
-            req.user.userId
-        );
-        
-        return res.status(201).json({
-            success:true,
-            message:"Issues created successfully",
-            data:issue
-        });
-    }
-    catch(e){
-        console.error("create issue error: ",e);
-
-        return res.status(500).json({
-            success:false,
-            message:"Failed to create issue"
-        });
-    }
+export const createIssueController = async (req: Request, res: Response) => {
+    const issue = await createIssue(getAuth(req), req.body);
+    res.status(201).json({ success: true, message: "Issue created successfully", data: issue });
 };
 
-export const getIssuesController=async(
-    req:Request,
-    res:Response
-)=>{
-    try{
-        if(!req.user){
-        return res.status(401).json({
-            success:false,
-            message:"Authentication Required"
-        });
-    }
-
-    const issues=await getIssues(
-        req.user.userId,
-        req.user.role
-    );
-
-    return res.status(200).json({
-        success:true,
-        data:issues
-    });
-    }
-    catch(e){
-        console.error("Get issues error:",e);
-        return res.status(500).json({
-            success:false,
-            message:"Failed to fetch issues"
-        });
-    }
+export const getIssuesController = async (req: Request, res: Response) => {
+    const { items, nextCursor } = await listIssues(getAuth(req), req.query as unknown as ListIssuesQuery);
+    res.status(200).json({ success: true, data: items, meta: { nextCursor } });
 };
 
-export const assignIssuesController=async(
-    req:Request,
-    res:Response
-)=>{
-    try{
-        const issueId=Number(req.params.id);
-
-        if(!Number.isInteger(issueId)||issueId<=0){
-            return res.status(400).json({
-                success:false,
-                message:"Invalid issue ID"
-            });
-        }
-
-        const result=assignIssueSchema.safeParse(req.body);
-
-        if(!result.success){
-            return res.status(400).json({
-                success:false,
-                message:"Validation failed",
-                errors:result.error.issues
-            });
-        }
-
-
-        const issue=await assignIssues(
-            issueId,
-            result.data.technicianId
-        );
-
-        return res.status(200).json({
-            success:true,
-            message:"Issues successfully assigned",
-            data:issue
-        });
-
-
-    }
-    catch(e){
-        console.error("Assign issue error",e);
-
-        return res.status(400).json({
-            success:false,
-            message:e  instanceof Error
-            ?e.message:
-            "Failed to assign issue"
-        });
-    }
+export const getIssueStatsController = async (req: Request, res: Response) => {
+    const stats = await getIssueStats(getAuth(req), req.query as unknown as IssueStatsQuery);
+    res.status(200).json({ success: true, data: stats });
 };
 
-
-export const acceptIssueController=async(
-    req:Request,
-    res:Response
-)=>{
-    try{
-        const issueId=Number(req.params.id);
-
-        if(!Number.isInteger(issueId)||issueId<=0){
-            return res.status(400).json({
-                sucess:false,
-                message:"Invalid issue id"
-            });
-        }
-
-        if(!req.user){
-            return res.status(401).json({
-                success:false,
-                message:"Authentication required"
-            });
-        }
-
-        const issue=await acceptIssue(
-            issueId,
-            req.user.userId
-        );
-
-        return res.status(200).json({
-            success:true,
-            message:"Issue successfully accepted",
-            data:issue
-        });
-        }
-        catch(e){
-            console.error("Accept issue error",e);
-
-            return res.status(401).json({
-                success:false,
-                message:e instanceof Error
-                ?e.message
-                :"Failed to accept issue"
-            });
-        }
+export const getIssueByIdController = async (req: Request, res: Response) => {
+    const issue = await getIssueById(getAuth(req), issueId(req));
+    res.status(200).json({ success: true, data: issue });
 };
 
-export const startIssueController=async(
-    req:Request,
-    res:Response
-)=>{
-    try{
-        const issueId=Number(req.params.id);
-
-        if(!Number.isInteger(issueId)||issueId<0){
-            return res.status(400).json({
-                success:false,
-                message:"Issue id is invalid"
-            });
-        }
-
-        if(!req.user){
-            return res.status(401).json({
-                success:false,
-                message:"Authentication required"
-            });
-        }
-
-        const issue=await startIssue(issueId,
-            req.user.userId
-        );
-
-        return res.status(200).json({
-            success:true,
-            message:"Issue started successfully",
-            data:issue
-        });
-
-    }
-    catch(e){
-        console.error("START ISSUE ERROR:", e);
-
-    return res.status(400).json({
-      success: false,
-      message: e instanceof Error
-        ? e.message
-        : "Failed to start issue"
-    });
-    }
-}
-
-export const resolveIssueController=async(
-    req:Request,
-    res:Response
-)=>{
-    try{
-        const issueId=Number(req.params.id);
-
-        if(!Number.isInteger(issueId)||issueId<=0){
-            return res.status(400).json({
-                success:false,
-                message:"Invalid issue id"
-            });
-        }
-
-        if(!req.user){
-            return res.status(401).json({
-                success:false,
-                message:"Authentication required"
-            });
-        }
-
-        const issue=await resolveIssue(
-            issueId,
-            req.user.userId
-        );
-
-        return res.status(200).json({
-            success:true,
-            message:"Issue resolved successfully",
-            data:issue
-        });
-    }
-    catch(e){
-       console.error("RESOLVE ISSUE ERROR:", e);
-
-        return res.status(400).json({
-        success: false,
-        message: e instanceof Error
-        ? e.message
-        : "Failed to resolve issue" 
-    });
-}
+export const assignIssueController = async (req: Request, res: Response) => {
+    const issue = await assignIssue(getAuth(req), issueId(req), req.body.technicianId);
+    res.status(200).json({ success: true, message: "Issue assigned", data: issue });
 };
 
-export const closeIssueController=async(
-    req:Request,
-    res:Response
-)=>{
-    try{
-        const issueId=Number(req.params.id);
-
-        if(!Number.isInteger(issueId)||issueId<0){
-            return res.status(400).json({
-                success: false,
-                message: "Invalid issue ID"
-            });
-        }
-        if (!req.user) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required"
-            });
-        }
-        const issue=await closeIssues(
-            issueId,
-            req.user.userId
-        );
-
-        return res.status(200).json({
-            sucess:true,
-            message:
-            "Issue closed succesfully",
-            data:issue
-        });
-    }
-
-    catch (error) {
-    console.error("CLOSE ISSUE ERROR:", error);
-
-    return res.status(400).json({
-      success: false,
-      message: error instanceof Error
-        ? error.message
-        : "Failed to close issue"
-    });
-  }
-}
-
-export const reopenIssueController=async(
-    req:Request,
-    res:Response
-)=>{
-    try{
-        const issueId=Number(req.params.id);
-
-        if(!Number.isInteger(issueId)||issueId<=0){
-            return res.status(400).json({
-                success:false,
-                message:"Invalid issue id"
-            });
-        }
-
-        if(!req.user){
-            return res.status(401).json({
-                success:false,
-                message:"Authentication required"
-            });
-        }
-
-        const issue=await reopenIssue(
-            issueId,
-            req.user.userId
-        );
-
-        return res.status(200).json({
-            success:true,
-            message:"Issue reopened successfully",
-            data:issue
-        });
-    }
-    catch(e){
-        console.error("REOPEN ISSUE ERROR:", e);
-
-    return res.status(400).json({
-      success: false,
-      message:
-        e instanceof Error
-          ? e.message
-          : "Failed to reopen issue"
-    });
-    }
-}
-
-export const getIssuesByIdController=async(
-    req:Request,
-    res:Response
-)=>{
-    try{
-        if(!req.user){
-            return res.status(401).json({
-                success:false,
-                message:"Authentication failed"
-            });
-        }
-
-        const issueId=Number(req.params.id);
-         if (!Number.isInteger(issueId) || issueId <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid issue ID"
-            });
-        }
-        const issue=await getIssueById(
-            issueId,
-            req.user.userId,
-            req.user.role
-        );
-
-        return res.status(200).json({
-            success:true,
-            data:issue
-        });
-    }
-    catch(error){
-        console.error("GET ISSUE BY ID ERROR:", error);
-        if (
-            error instanceof Error &&
-            error.message === "Issue not found"
-        ) {
-            return res.status(404).json({
-                success: false,
-                message: error.message
-            });
-        }
-        if (
-            error instanceof Error &&
-            error.message ===
-                "You don't have permission to view this issue"
-        ) {
-            return res.status(403).json({
-                success: false,
-                message: error.message
-            });
-        }
-
-        return res.status(500).json({
-            success: false,
-            message: "Failed to fetch issue"
-        });
-    }
+export const updateIssuePriorityController = async (req: Request, res: Response) => {
+    const issue = await updateIssuePriority(getAuth(req), issueId(req), req.body.priority);
+    res.status(200).json({ success: true, message: "Priority updated", data: issue });
 };
 
-export const addIssueAttachmentController = async (
-    req: Request,
-    res: Response
-) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required"
-            });
-        }
+export const getSuggestionsController = async (req: Request, res: Response) => {
+    const suggestions = await getSuggestions(getAuth(req), issueId(req));
+    res.status(200).json({ success: true, data: suggestions });
+};
 
-        const issueId = Number(req.params.id);
+export const transitionIssueController = async (req: Request, res: Response) => {
+    const issue = await transitionIssue(getAuth(req), issueId(req), req.body);
+    res.status(200).json({ success: true, message: `Issue moved to ${issue.status}`, data: issue });
+};
 
-        if (!Number.isInteger(issueId) || issueId <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid issue ID"
-            });
-        }
+export const listCommentsController = async (req: Request, res: Response) => {
+    const comments = await listComments(getAuth(req), issueId(req));
+    res.status(200).json({ success: true, data: comments });
+};
 
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                message: "Image is required"
-            });
-        }
+export const addCommentController = async (req: Request, res: Response) => {
+    const comment = await addComment(getAuth(req), issueId(req), req.body.body);
+    res.status(201).json({ success: true, message: "Comment added", data: comment });
+};
 
-        const attachment = await addIssueAttachment(
-            issueId,
-            req.user.userId,
-            req.user.role,
-            req.file
-        );
-
-        return res.status(201).json({
-            success: true,
-            message: "Attachment uploaded successfully",
-            data: attachment
-        });
-
-    } catch (error) {
-        console.error("ADD ATTACHMENT ERROR:", error);
-
-        return res.status(500).json({
-            success: false,
-            message:
-                error instanceof Error
-                    ? error.message
-                    : "Failed to upload attachment"
-        });
+export const addIssueAttachmentController = async (req: Request, res: Response) => {
+    if (!req.file) {
+        throw AppError.badRequest("Image is required");
     }
+
+    const kind = req.body?.kind === "AFTER" ? "AFTER" : "BEFORE";
+    const attachment = await addIssueAttachment(getAuth(req), issueId(req), req.file, kind);
+    res.status(201).json({ success: true, message: "Attachment uploaded", data: attachment });
+};
+
+export const getSimilarIssuesController = async (req: Request, res: Response) => {
+    const issues = await findSimilarIssues(getAuth(req), req.query as unknown as SimilarIssuesQuery);
+    res.status(200).json({ success: true, data: issues });
+};
+
+export const followIssueController = async (req: Request, res: Response) => {
+    const issue = await followIssue(getAuth(req), issueId(req));
+    res.status(200).json({ success: true, message: "You'll get updates on this issue", data: issue });
+};
+
+export const unfollowIssueController = async (req: Request, res: Response) => {
+    await unfollowIssue(getAuth(req), issueId(req));
+    res.status(200).json({ success: true, message: "You'll no longer get updates on this issue" });
+};
+
+export const markDuplicateController = async (req: Request, res: Response) => {
+    const issue = await markDuplicate(getAuth(req), issueId(req), req.body.duplicateOfId);
+    res.status(200).json({ success: true, message: `Closed as a duplicate of #${req.body.duplicateOfId}`, data: issue });
 };

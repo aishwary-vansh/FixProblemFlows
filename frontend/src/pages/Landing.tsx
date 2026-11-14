@@ -334,7 +334,7 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="ff-wrap ff-foot"><span>© {new Date().getFullYear()} FixFlow</span><span>Report. Assign. Fix. Verify.</span></footer>
+      <footer className="ff-wrap ff-foot"><span>© {new Date().getFullYear()} FixFlow</span><span><Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link></span><span>Report. Assign. Fix. Verify.</span></footer>
     </div>
   );
 }

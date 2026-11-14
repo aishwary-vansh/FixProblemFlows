@@ -1,61 +1,56 @@
-import type {Request,Response,NextFunction} from "express";
-import jwt from "jsonwebtoken";
-import type { AuthenticatedUser } from "../types/auth.js";
+import type { Request, Response, NextFunction } from "express";
+import prisma from "../config/prisma.js";
+import { verifyToken } from "../utils/jwt.js";
+import { AppError } from "../utils/AppError.js";
+import type { AuthContext } from "../types/auth.js";
 
-const JWT_SECRET=process.env.JWT_SECRET;
+/**
+ * Verifies the bearer token, then loads the caller's membership in the token's org.
+ * Role and active flags come from the database, so role changes and deactivation
+ * take effect immediately instead of when the token expires.
+ */
+export const authenticate = async (req: Request, _res: Response, next: NextFunction) => {
+    const header = req.headers.authorization;
+    const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : undefined;
 
-if(!JWT_SECRET){
-    throw new Error("JWT_SECRET is not defined");
-}
-
-
-export const authenticate=(
-    req:Request,
-    res:Response,
-    next:NextFunction
-)=>{
-    const authHeader=req.headers.authorization;
-    
-    console.log("ALL HEADERS:", req.headers);
-    console.log("AUTH HEADER:", authHeader);
-    if(!authHeader||!authHeader.startsWith("Bearer")){
-        return res.status(401).json({
-            success:false,
-            message:"Authentication required"
-        });
-    }
-    const token = authHeader.split(" ")[1];
     if (!token) {
-    return res.status(401).json({
-        success: false,
-        message: "Invalid authorization header"
+        throw AppError.unauthorized();
+    }
+
+    const payload = verifyToken(token);
+    if (!payload) {
+        throw AppError.unauthorized("Invalid or expired token");
+    }
+
+    const membership = await prisma.membership.findUnique({
+        where: { orgId_userId: { orgId: payload.orgId, userId: payload.userId } },
+        select: { id: true, role: true, isActive: true, user: { select: { isActive: true, passwordChangedAt: true } } },
     });
-}
-    try{
-        
-        const decoded=jwt.verify(token,JWT_SECRET);
-        // console.log("Authenticated User :",decoded);
-        if(typeof decoded === "string"){
-            return res.status(401).json({
-                success:false,
-                message:"Invalid tokens"
-            });
-        }
 
-        const user:AuthenticatedUser={
-            userId:decoded.userId as number,
-            role:decoded.role as AuthenticatedUser["role"]
-        };
-
-        req.user=user;
-
-        next();
+    if (!membership || !membership.isActive || !membership.user.isActive) {
+        throw AppError.unauthorized("Your access to this organization has been removed");
     }
-    catch(error){
-        return res.status(401).json({
-            success:false,
-            message:"Invalid or expired token"
-        });
+
+    // A password change logs out every token issued before it.
+    const changedAt = membership.user.passwordChangedAt;
+    if (changedAt && payload.issuedAtMs < changedAt.getTime()) {
+        throw AppError.unauthorized("Your password was changed. Please log in again.");
     }
-    
+
+    req.auth = {
+        userId: payload.userId,
+        orgId: payload.orgId,
+        membershipId: membership.id,
+        role: membership.role,
+    };
+
+    next();
+};
+
+/** Narrows `req.auth` for handlers mounted after `authenticate`. */
+export const getAuth = (req: Request): AuthContext => {
+    if (!req.auth) {
+        throw AppError.unauthorized();
+    }
+    return req.auth;
 };

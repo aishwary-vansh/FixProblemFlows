@@ -1,54 +1,25 @@
 import multer from "multer";
-import path from "path";
-import fs from "fs";
+import { AppError } from "../utils/AppError.js";
 
-const uploadDirectory=path.join(
-    process.cwd(),
-    "uploads",
-    "issues"
-);
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-if(!fs.existsSync(uploadDirectory)){
-    fs.mkdirSync(uploadDirectory,{
-        recursive:true
-    });
-}
+const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
-const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-        cb(null, uploadDirectory);
-    },
-
-    filename: (_req, file, cb) => {
-        const uniqueName =
-            `${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname)}`;
-
-        cb(null, uniqueName);
-    }
-});
-
-const fileFilter: multer.Options["fileFilter"] = (
-    _req,
-    file,
-    cb
-) => {
-    const allowedTypes = [
-        "image/jpeg",
-        "image/png",
-        "image/webp"
-    ];
-
-    if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-    } else {
-        cb(new Error("Only JPEG, PNG and WEBP images are allowed"));
-    }
-};
-
+/**
+ * Keeps the upload in memory: the service checks permissions and the real file
+ * type (magic bytes) before anything is written to storage.
+ */
 export const uploadIssueImage = multer({
-    storage,
-    fileFilter,
+    storage: multer.memoryStorage(),
     limits: {
-        fileSize: 5 * 1024 * 1024
-    }
+        fileSize: MAX_IMAGE_BYTES,
+        files: 1,
+    },
+    fileFilter: (_req, file, cb) => {
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(AppError.unsupportedMediaType("Only JPEG, PNG and WEBP images are allowed"));
+        }
+    },
 });

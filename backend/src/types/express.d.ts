@@ -1,9 +1,9 @@
-import {AuthenticatedUser} from "./auth.js";
+import type { AuthContext } from "./auth.js";
 
-declare global{
-    namespace Express{
-        interface Request{
-            user?:AuthenticatedUser;
+declare global {
+    namespace Express {
+        interface Request {
+            auth?: AuthContext;
         }
     }
 }

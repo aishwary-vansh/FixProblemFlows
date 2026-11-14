@@ -1,80 +1,85 @@
-import { useState} from "react";
-import { Link, useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import api, { getErrorMessage } from "../services/api";
 import AuthLayout, { Field } from "../layouts/AuthLayout";
+import { saveSession } from "../lib/session";
+import { safeNextPath } from "../lib/reportPoint";
 
-const Login=()=>{
-    const [email,setEmail]=useState("");
-    const [password,setpassWord]=useState("");
+const Login = () => {
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
 
-    const [loading,setLoading]=useState(false);
-    const [error,setError]=useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const navigate=useNavigate();
-    const handleSubmit=async (e:React.FormEvent<HTMLFormElement>)=>{
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError("");
         setLoading(true);
-        try{
-            const response=await api.post("/auth/login",{
+        try {
+            const response = await api.post("/auth/login", {
                 email,
                 password
             });
-            console.log("Login response :",response.data);
-            const{token,user} =response.data.data;
-            localStorage.setItem("token",token);
-            localStorage.setItem("user",JSON.stringify(user));
-            navigate("/dashboard");
+            saveSession(response.data.data);
+            navigate(safeNextPath(searchParams.get("next")) ?? "/dashboard");
         }
-        catch(e){
-            console.error("Login error",e);
-            setError("Invalid email or password");
+        catch (err) {
+            setError(getErrorMessage(err, "Invalid email or password"));
         }
-        finally{
+        finally {
             setLoading(false);
         }
-        
     };
 
     return (
         <AuthLayout
-            title="Welcome back to Fixflow"
+            title="Welcome back to FixFlow"
             footer={
                 <>
-                Don't have an account{" "}
-                <Link to ="/signup">Create an account</Link>
+                    New to FixFlow?{" "}
+                    <Link to="/signup">Create an organization</Link>
                 </>
             }
-            >
-
+        >
             <form onSubmit={handleSubmit} className="fa-card">
                 <Field
                     label="Email"
-                    type="email" 
+                    type="email"
                     value={email}
                     onChange={setEmail}
                     placeholder="Enter your email"
                     autoComplete="email"
-                    />
-                
+                />
+
                 <Field
                     label="Password"
-                    type="password" 
+                    type="password"
                     value={password}
-                    onChange={setpassWord}
+                    onChange={setPassword}
                     placeholder="Enter your password"
                     autoComplete="current-password"
-                    />
-                {error && (<div className="fa-msg fa-err">
+                />
+                <Link to="/forgot-password" className="fa-fine" style={{ justifySelf: "end", marginTop: -8 }}>
+                    Forgot password?
+                </Link>
+                {error && (
+                    <div className="fa-msg fa-err" role="alert">
                         {error}
-                    </div>)}
+                    </div>
+                )}
                 <button type="submit" disabled={loading} className="fa-btn">
-                    {loading ?"Logging In ...":"Login"}
+                    {loading ? "Logging in..." : "Login"}
                 </button>
+                <p className="fa-fine">
+                    Joining an existing team? Open the invite link your admin sent you.
+                </p>
             </form>
         </AuthLayout>
     );
 };
-
 
 export default Login;

@@ -33,3 +33,14 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+# Local attachment storage
+uploads/
+
+# Generated Prisma client (run `npm run db:generate`)
+src/generated/
+
+# Compiled Prisma config
+prisma7.config.js
+prisma7.config.js.map
+prisma7.config.d.ts
+prisma7.config.d.ts.map

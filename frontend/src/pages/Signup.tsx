@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
 
-import api from "../services/api";
+import api, { getErrorMessage } from "../services/api";
 import AuthLayout, { Field } from "../layouts/AuthLayout";
+import { saveSession } from "../lib/session";
 
+import { PASSWORD_HINT } from "../lib/constants";
+
+/** Signup creates a new organization and makes the user its owner. Team members join by invite. */
 const Signup = () => {
+    const [organizationName, setOrganizationName] = useState("");
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
@@ -23,11 +27,17 @@ const Signup = () => {
     ) => {
         e.preventDefault();
 
+        if (password !== confirmPassword) {
+            setError("Passwords do not match");
+            return;
+        }
+
         setError("");
         setLoading(true);
 
         try {
             const response = await api.post("/auth/register", {
+                organizationName,
                 name,
                 email,
                 phone,
@@ -36,23 +46,10 @@ const Signup = () => {
                 termsAccepted,
             });
 
-            console.log("Signup response:", response.data);
-
-            navigate("/login");
-        } catch (e) {
-            console.error("Signup error:", e);
-
-            if (axios.isAxiosError(e)) {
-                console.log("Status:", e.response?.status);
-                console.log("Response data:", e.response?.data);
-
-                setError(
-                    e.response?.data?.message ||
-                    "Registration failed"
-                );
-            } else {
-                setError("Registration failed");
-            }
+            saveSession(response.data.data);
+            navigate("/dashboard");
+        } catch (err) {
+            setError(getErrorMessage(err, "Registration failed"));
         } finally {
             setLoading(false);
         }
@@ -60,7 +57,7 @@ const Signup = () => {
 
     return (
         <AuthLayout
-            title="Create your FixFlow account"
+            title="Set up FixFlow for your organization"
             footer={
                 <>
                     Already have an account?{" "}
@@ -73,7 +70,16 @@ const Signup = () => {
                 className="fa-card"
             >
                 <Field
-                    label="Name"
+                    label="Organization name"
+                    value={organizationName}
+                    onChange={setOrganizationName}
+                    placeholder="e.g. Sunrise Hostel"
+                    autoComplete="organization"
+                    hint="You'll be the owner. Invite admins, technicians and residents after signup."
+                />
+
+                <Field
+                    label="Your name"
                     value={name}
                     onChange={setName}
                     placeholder="Enter your name"
@@ -94,7 +100,7 @@ const Signup = () => {
                     type="tel"
                     value={phone}
                     onChange={setPhone}
-                    placeholder="Enter your phone number"
+                    placeholder="10-digit mobile number"
                     autoComplete="tel"
                 />
 
@@ -105,6 +111,7 @@ const Signup = () => {
                     onChange={setPassword}
                     placeholder="Create a password"
                     autoComplete="new-password"
+                    hint={PASSWORD_HINT}
                 />
 
                 <Field
@@ -123,12 +130,15 @@ const Signup = () => {
                         onChange={(e) =>
                             setTermsAccepted(e.target.checked)
                         }
+                        required
                     />{" "}
-                    I accept the terms and conditions
+                    I accept the{" "}
+                    <Link to="/terms" target="_blank">Terms of Service</Link> and{" "}
+                    <Link to="/privacy" target="_blank">Privacy Policy</Link>
                 </label>
 
                 {error && (
-                    <div className="fa-msg fa-err">
+                    <div className="fa-msg fa-err" role="alert">
                         {error}
                     </div>
                 )}
@@ -139,8 +149,8 @@ const Signup = () => {
                     disabled={loading}
                 >
                     {loading
-                        ? "Creating account..."
-                        : "Create Account"}
+                        ? "Creating organization..."
+                        : "Create organization"}
                 </button>
             </form>
         </AuthLayout>

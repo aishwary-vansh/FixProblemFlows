@@ -47,6 +47,7 @@
     "node_modules",
     "generated",
     "prisma",
-    "prisma7.config.ts"
+    "prisma7.config.ts",
+    "src/**/*.test.ts"
   ]
 }

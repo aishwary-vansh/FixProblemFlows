@@ -1,0 +1,13 @@
+{
+  "name": "FixFlow",
+  "short_name": "FixFlow",
+  "description": "Report and track maintenance issues",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0a14",
+  "theme_color": "#7c3aed",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

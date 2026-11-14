@@ -1,47 +1,77 @@
 import express from "express";
-import "dotenv/config";
 import cors from "cors";
 import helmet from "helmet";
-import prisma from "./config/prisma.js"
-import authRoutes from "./routes/auth.routes.js"
-import issueRoutes from "./routes/issue.routes.js"
-import path from "path";
+import { pinoHttp } from "pino-http";
+import { env } from "./config/env.js";
+import { logger } from "./config/logger.js";
+import prisma from "./config/prisma.js";
+import authRoutes from "./routes/auth.routes.js";
+import issueRoutes from "./routes/issue.routes.js";
+import fileRoutes from "./routes/file.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
+import organizationRoutes from "./routes/organization.routes.js";
+import locationRoutes from "./routes/location.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
+import pushRoutes from "./routes/push.routes.js";
+import reportPointRoutes from "./routes/reportPoint.routes.js";
+import platformRoutes from "./routes/platform.routes.js";
+import { inviteRoutes, joinRoutes, memberRoutes } from "./routes/member.routes.js";
+import { apiLimiter } from "./middleware/rateLimit.middleware.js";
+import { errorHandler, notFoundHandler } from "./middleware/error.middleware.js";
 
-const app=express();
+const app = express();
 
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
+app.set("trust proxy", env.TRUST_PROXY);
+app.disable("x-powered-by");
 
-app.use("/api/auth",authRoutes);
-app.use("/api/issues",issueRoutes)
-app.get('/',(req,res)=>{
-    res.json({
-        success:true,
-        message:"FixFlow API is working"
-    });
-});
-app.use("/uploads",express.static(path.join(process.cwd(),"uploads"))
+app.use(
+    helmet({
+        // Attachment images are loaded by the web app from another origin.
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+    })
 );
-app.get("/test-db",async(req,res)=>{
-    try{
-        const userCount=await prisma.user.count();
-        res.json({
-            success:true,
-            message:"Database connected",
-            users:userCount
-        });
-    }
-    catch(error){
-        console.error(error);
 
-        res.status(500).json({
-            success:false,
-            message:"Database connection failed",
-            error: error instanceof Error ? error.message : String(error)
-        });
+app.use(
+    cors({
+        origin: env.corsOrigins,
+    })
+);
+
+app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/health" } }));
+app.use(express.json({ limit: "100kb" }));
+
+app.get("/", (_req, res) => {
+    res.json({ success: true, message: "FixFlow API is working" });
+});
+
+/** Liveness + database check for uptime monitors and the hosting platform. */
+app.get("/health", async (_req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.json({ status: "ok", db: "ok" });
+    } catch {
+        res.status(503).json({ status: "degraded", db: "unreachable" });
     }
 });
 
+app.use("/api", apiLimiter);
+app.use("/api/auth", authRoutes);
+app.use("/api/issues", issueRoutes);
+app.use("/api/members", memberRoutes);
+app.use("/api/invites", inviteRoutes);
+app.use("/api/join", joinRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/organization", organizationRoutes);
+app.use("/api/locations", locationRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/push", pushRoutes);
+app.use("/api/report-points", reportPointRoutes);
+app.use("/api/platform", platformRoutes);
+if (env.STORAGE_DRIVER === "local") {
+    app.use("/api/files", fileRoutes);
+}
+
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 export default app;

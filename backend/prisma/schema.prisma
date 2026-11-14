@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -12,10 +10,12 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Role {
-  USER
-  TECHNICIAN
+// Role of a user inside one organization. A user can belong to several orgs.
+enum OrgRole {
+  OWNER
   ADMIN
+  TECHNICIAN
+  REQUESTER
 }
 
 enum IssueStatus {
@@ -23,9 +23,20 @@ enum IssueStatus {
   ASSIGNED
   ACCEPTED
   IN_PROGRESS
+  ON_HOLD
   RESOLVED
   CLOSED
   REOPENED
+}
+
+enum IssueCategory {
+  ELECTRICAL
+  PLUMBING
+  CARPENTRY
+  CIVIL
+  HVAC
+  IT
+  GENERAL
 }
 
 enum Priority {
@@ -35,52 +46,364 @@ enum Priority {
   CRITICAL
 }
 
+enum TechnicianSpecialization {
+  ELECTRICAL
+  PLUMBING
+  CARPENTRY
+  CIVIL
+  HVAC
+  IT
+  GENERAL
+}
+
+model Organization {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  // New issues go straight to the best-matching technician when on.
+  autoAssign Boolean @default(false)
+  // Reusable public link that lets anyone join as a requester. Null means the link is off.
+  joinCode  String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+  invites       Invite[]
+  locations     Location[]
+  reportPoints  ReportPoint[]
+  auditLogs     AuditLog[]
+  issues        Issue[]
+  issueFollowers IssueFollower[]
+  attachments   Attachment[]
+  issueEvents   IssueEvent[]
+  comments      Comment[]
+  notifications Notification[]
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   name         String
   email        String   @unique
   passwordHash String
   phone        String
-  role         Role     @default(USER)
+  // Tokens issued before this are rejected, so a password reset logs out every device.
+  passwordChangedAt DateTime?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  reportedIssues Issue[] @relation("reportedIssues")
-  assignedIssues Issue[] @relation("assignedIssues")
+  memberships    Membership[]
+  invitesCreated Invite[]     @relation("invitesCreated")
+  reportedIssues Issue[]      @relation("reportedIssues")
+  assignedIssues Issue[]      @relation("assignedIssues")
+  issueEvents    IssueEvent[]
+  comments       Comment[]
+  notifications  Notification[]
+  pushSubscriptions PushSubscription[]
+  followedIssues    IssueFollower[]
+  passwordResets    PasswordResetToken[]
+  auditLogs         AuditLog[]
+}
+
+model Membership {
+  id             Int                       @id @default(autoincrement())
+  orgId          Int
+  userId         Int
+  role           OrgRole                   @default(REQUESTER)
+  specialization TechnicianSpecialization?
+  isActive       Boolean                   @default(true)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([userId])
+  @@index([orgId, role])
+}
+
+model Invite {
+  id             Int                       @id @default(autoincrement())
+  orgId          Int
+  email          String?
+  role           OrgRole
+  specialization TechnicianSpecialization?
+  tokenHash      String                    @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  createdById    Int
+  createdAt      DateTime                  @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("invitesCreated", fields: [createdById], references: [id])
+
+  @@index([orgId, createdAt])
+}
+
+// A building (no parent) or a floor inside one. Archived instead of deleted, so old issues keep their link.
+model Location {
+  id        Int      @id @default(autoincrement())
+  orgId     Int
+  parentId  Int?
+  name      String
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  parent       Location?    @relation("floors", fields: [parentId], references: [id])
+  floors       Location[]   @relation("floors")
+  issues       Issue[]
+  reportPoints ReportPoint[]
+
+  @@index([orgId, parentId])
 }
 
 model Issue {
   id          Int    @id @default(autoincrement())
+  orgId       Int
   title       String
   description String
+  // Readable place for people: "Block A · 2nd Floor · Room 204". Saved as text so renames don't change history.
   location    String
+  // The building or floor picked from the list, for grouping. Null when reported as "Other".
+  locationId  Int?
 
-  status   IssueStatus @default(NEW)
-  priority Priority    @default(MEDIUM)
-
+  status     IssueStatus   @default(NEW)
+  priority   Priority      @default(MEDIUM)
+  category   IssueCategory @default(GENERAL)
   reporterId Int
   assigneeId Int?
 
-  reporter User  @relation("reportedIssues", fields: [reporterId], references: [id])
-  assignee User? @relation("assignedIssues", fields: [assigneeId], references: [id])
+  // Resolution deadline. breachedAt is set once when the deadline passes.
+  dueAt      DateTime?
+  breachedAt DateTime?
+  // Set while ON_HOLD; the time held is added to dueAt on resume.
+  heldAt     DateTime?
 
-  attachments Attachment[]
+  // Recorded by the technician when resolving.
+  resolutionNote String?
+  repairCost     Int?
+  repairMinutes  Int?
+  // Set on each resolve and cleared on reopen. Drives fix-time reports and auto-close.
+  resolvedAt     DateTime?
+  // 1 to 5 stars from the reporter when they confirm the fix.
+  rating         Int?
+  // Set when an admin closes this as a repeat of another issue.
+  duplicateOfId  Int?
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  reporter     User         @relation("reportedIssues", fields: [reporterId], references: [id])
+  assignee     User?        @relation("assignedIssues", fields: [assigneeId], references: [id])
+  place        Location?    @relation(fields: [locationId], references: [id])
+  duplicateOf  Issue?       @relation("duplicates", fields: [duplicateOfId], references: [id])
+  duplicates   Issue[]      @relation("duplicates")
+  followers    IssueFollower[]
+
+  attachments   Attachment[]
+  events        IssueEvent[]
+  comments      Comment[]
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([orgId, status])
+  @@index([orgId, createdAt])
+  @@index([orgId, reporterId])
+  @@index([orgId, assigneeId])
+  @@index([orgId, locationId])
+  @@index([dueAt])
+  @@index([status, resolvedAt])
+}
+
+// BEFORE shows the problem; AFTER is the technician's proof of the fix.
+enum AttachmentKind {
+  BEFORE
+  AFTER
 }
 
 model Attachment {
-  id        Int    @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  issueId   Int
-  fileName  String
-  fileUrl   String
-  mimeType  String
-  fileSize  Int
+  orgId      Int
+  issueId    Int
+  uploaderId Int?
+  fileName   String
+  // Object key inside the storage bucket (or local upload dir), e.g. "issues/<orgId>/<uuid>.png".
+  storageKey String
+  mimeType   String
+  fileSize   Int
+  kind       AttachmentKind @default(BEFORE)
 
-  issue     Issue  @relation(fields: [issueId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  issue        Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+
+  @@index([orgId, issueId])
+}
+
+enum IssueEventType {
+  CREATED
+  ASSIGNED
+  STATUS_CHANGED
+  ATTACHMENT_ADDED
+  PRIORITY_CHANGED
+  SLA_BREACHED
+  DECLINED
+  FOLLOWED
+  MARKED_DUPLICATE
+}
+
+// Activity timeline: who did what to an issue, and when.
+model IssueEvent {
+  id         Int            @id @default(autoincrement())
+  orgId      Int
+  issueId    Int
+  actorId    Int?
+  type       IssueEventType
+  fromStatus IssueStatus?
+  toStatus   IssueStatus?
+  note       String?
+  createdAt  DateTime       @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  issue        Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorId], references: [id])
+
+  @@index([orgId, issueId])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  orgId     Int
+  issueId   Int
+  authorId  Int
+  body      String
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  issue        Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id])
+
+  @@index([orgId, issueId])
+}
+
+enum NotificationType {
+  ISSUE_CREATED
+  ISSUE_ASSIGNED
+  STATUS_CHANGED
+  COMMENT_ADDED
+  ISSUE_REOPENED
+  VERIFICATION_REQUESTED
+  ISSUE_OVERDUE
+  ISSUE_DECLINED
+  ISSUE_ON_HOLD
+}
+
+// In-app inbox. One row per recipient.
+model Notification {
+  id        Int              @id @default(autoincrement())
+  orgId     Int
+  userId    Int
+  issueId   Int
+  type      NotificationType
+  message   String
+  readAt    DateTime?
+  // Set once the push job has sent this to the user's devices.
+  pushedAt  DateTime?
+  createdAt DateTime         @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  issue        Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, userId, createdAt])
+  @@index([pushedAt, createdAt])
+}
+
+// A browser or phone that asked for push alerts. Belongs to whoever last logged in on it.
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// "Me too": someone else affected by the same problem. Followers can see the issue and get its updates.
+model IssueFollower {
+  id        Int      @id @default(autoincrement())
+  orgId     Int
+  issueId   Int
+  userId    Int
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  issue        Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId])
+  @@index([orgId, userId])
+}
+
+// One-time link for "Forgot password". Only the hash is stored.
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// A QR code an admin puts up at any spot they choose (the mess, a gym, one washroom, a whole building).
+// Scanning it opens the report form with the place already filled in.
+model ReportPoint {
+  id         Int      @id @default(autoincrement())
+  orgId      Int
+  name       String
+  // Public part of the QR link. Random, so points can't be guessed.
+  code       String   @unique
+  // Optional building or floor to preselect.
+  locationId Int?
+  // Optional exact spot to prefill, e.g. "Kitchen, near the sink".
+  spot       String?
+  archived   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id])
+
+  @@index([orgId, archived])
+}
+
+// Who changed settings, roles, invites, locations and QR points. Owners and admins can read it.
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  orgId     Int
+  // Null for actions the system took.
+  actorId   Int?
+  // Dotted name such as "member.role_changed" or "join_link.created".
+  action    String
+  // What it was done to, in words, e.g. "Ravi Plumber" or "Block A".
+  target    String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt])
 }
