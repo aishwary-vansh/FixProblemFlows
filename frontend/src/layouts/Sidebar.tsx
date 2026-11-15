@@ -1,6 +1,6 @@
 import { Link, NavLink } from "react-router-dom";
+import LogoMark from "../components/Logo";
 import {
-    Check,
     LayoutDashboard,
     CircleAlert,
     LogOut,
@@ -97,9 +97,7 @@ const Sidebar = ({ role, profile, onLogout }: SidebarProps) => {
         <aside className="fx-sidebar">
 
             <div className="fx-brand">
-                <span className="fx-brand-mark">
-                    <Check size={16} strokeWidth={3} />
-                </span>
+                <LogoMark size={32} className="fx-brand-mark" />
 
                 <span>FixFlow</span>
             </div>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="FixFlow">
+  <defs>
+    <linearGradient id="ff-tile" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FBBF24"/>
+      <stop offset="0.5" stop-color="#F472B6"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#ff-tile)"/>
+  <!-- An F whose middle bar is a tick: report it, fix it, confirm it. -->
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 49 V25 Q21 15 31 15 H45" stroke-width="8.5"/>
+    <path d="M21 33 H26.5 L31.5 38 L44 25.5" stroke-width="7.5"/>
+  </g>
+</svg>

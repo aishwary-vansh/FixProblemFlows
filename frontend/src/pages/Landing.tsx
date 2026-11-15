@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
+import LogoMark from "../components/Logo";
 
 /* src/pages/Landing.tsx  (route: /)
    Self-contained CSS (no Tailwind needed). Needs react + react-router-dom.
@@ -34,7 +35,7 @@ html{scroll-behavior:smooth}
 .ff-head{position:sticky;top:0;z-index:20;background:var(--hd);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
 .ff-bar{display:flex;align-items:center;justify-content:space-between;height:68px;gap:12px}
 .ff-logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:-.02em}
-.ff-mark{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#FBBF24,#F472B6,#7C3AED)}
+.ff-mark{display:block;flex-shrink:0}
 .ff-nav{display:flex;gap:4px;font-size:14px;color:var(--mut)}
 .ff-nav a,.ff-link{padding:8px 14px;border-radius:99px;transition:background .25s,color .25s}
 .ff-nav a:hover,.ff-link:hover{background:var(--line);color:var(--tx)}
@@ -242,7 +243,7 @@ export default function Landing() {
       <header className="ff-head">
         <div className="ff-wrap ff-bar">
           <a href="#top" className="ff-logo">
-            <span className="ff-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12.5l5 5L20 6.5" /></svg></span>
+            <LogoMark size={34} className="ff-mark" />
             FixFlow
           </a>
           <nav className="ff-nav" aria-label="Sections"><a href="#why">Why FixFlow</a><a href="#roles">Roles</a><a href="#how">How it works</a><a href="#features">Features</a></nav>

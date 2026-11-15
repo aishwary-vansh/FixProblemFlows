@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Building2, Check, LayoutDashboard, LogOut, ShieldCheck } from "lucide-react";
+import { Building2, LayoutDashboard, LogOut, ShieldCheck } from "lucide-react";
+import LogoMark from "../components/Logo";
 import Topbar from "./Topbar";
 import { clearConsoleSession, getConsoleAdmin } from "../lib/consoleApi";
 import "./layout.css";
@@ -48,9 +49,7 @@ const ConsoleLayout = () => {
         <div className="fx-app" data-theme={theme}>
             <aside className="fx-sidebar">
                 <div className="fx-brand">
-                    <span className="fx-brand-mark">
-                        <Check size={16} strokeWidth={3} />
-                    </span>
+                    <LogoMark size={32} className="fx-brand-mark" />
                     <span>FixFlow Console</span>
                 </div>
 

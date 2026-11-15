@@ -11,8 +11,8 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
         self.registration.showNotification(data.title || "FixFlow", {
             body: data.body || "You have a new update",
-            icon: "/favicon.svg",
-            badge: "/favicon.svg",
+            icon: "/logo.svg",
+            badge: "/logo.svg",
             data: { url: data.url || "/dashboard" },
         })
     );

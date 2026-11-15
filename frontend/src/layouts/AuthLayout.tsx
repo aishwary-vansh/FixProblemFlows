@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import LogoMark from "../components/Logo";
 
 /* src/components/AuthLayout.tsx
    Shared shell for Login and Signup. Self-contained CSS, follows the same
@@ -13,7 +14,7 @@ const CSS = `
 .fa *{box-sizing:border-box}.fa a{color:var(--tx);font-weight:600;text-decoration:none}.fa a:hover{text-decoration:underline}
 .fa-in{width:100%;max-width:440px;text-align:center;animation:fa-up .6s cubic-bezier(.2,.7,.2,1) backwards}
 @keyframes fa-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-.fa-logo{width:52px;height:52px;margin:0 auto 18px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#FBBF24,#F472B6,#7C3AED)}
+.fa-logo{display:block;margin:0 auto 18px}
 .fa h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0 0 26px}
 .fa-card{text-align:left;border:1px solid var(--bd);background:var(--card);border-radius:24px;padding:28px;display:grid;gap:18px}
 .fa-lab{display:block;font-size:14px;font-weight:600;margin-bottom:8px}
@@ -86,9 +87,7 @@ export default function AuthLayout(props: { title: string; children: ReactNode; 
     <div className="fa" data-theme={getTheme()}>
       <style>{CSS}</style>
       <div className="fa-in">
-        <div className="fa-logo" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12.5l5 5L20 6.5" /></svg>
-        </div>
+        <LogoMark size={52} className="fa-logo" />
         <h1>{props.title}</h1>
         {props.children}
         <p className="fa-alt">{props.footer}</p>
