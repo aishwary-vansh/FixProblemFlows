@@ -10,6 +10,7 @@ import { pickAutoAssignee, scoreTechnician } from "../domain/dispatch.js";
 import { formatIssueLocation } from "../domain/locations.js";
 import { canSeeRepairDetails, hasFullAccess, limitIssueDetail, limitIssueRow } from "../domain/issueAccess.js";
 import { PRIORITY_EDITABLE_STATUSES, SLA_OPEN_STATUSES, getDueAt, resumeDeadline } from "../domain/sla.js";
+import { effectivePlan, limitsFor } from "../domain/plans.js";
 import { getCandidates } from "./dispatch.service.js";
 import { getAdminUserIds, notify } from "./notification.service.js";
 import type { Tx } from "./notification.service.js";
@@ -193,9 +194,10 @@ export const createIssue = async (ctx: AuthContext, input: CreateIssueInput) => 
 
         const organization = await tx.organization.findUnique({
             where: { id: ctx.orgId },
-            select: { autoAssign: true },
+            select: { autoAssign: true, plan: true, planEndsAt: true },
         });
-        if (!organization?.autoAssign) {
+        // A setting left on after Pro ended does nothing on Free.
+        if (!organization?.autoAssign || !limitsFor(effectivePlan(organization)).autoAssign) {
             return issue;
         }
 

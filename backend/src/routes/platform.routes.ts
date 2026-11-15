@@ -1,80 +1,91 @@
 import { Router } from "express";
 import type { NextFunction, Request, Response } from "express";
 import prisma from "../config/prisma.js";
-import { env } from "../config/env.js";
-import { authenticate, getAuth } from "../middleware/auth.middleware.js";
+import { z } from "zod";
+import { authLimiter } from "../middleware/rateLimit.middleware.js";
+import { loginSchema } from "../validators/auth.validator.js";
+import { verifyCredentials } from "../services/auth.services.js";
+import { generateConsoleToken, verifyConsoleToken } from "../utils/jwt.js";
 import { AppError } from "../utils/AppError.js";
+import { validate } from "../middleware/validate.middleware.js";
+import { applyPlanAction, getOverview, getPlanHistory, listOrganizationRows } from "../services/console.service.js";
+import { planActionSchema } from "../validators/console.validator.js";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The people who run this FixFlow installation (PLATFORM_ADMIN_USER_IDS), not the admins of one organization. */
-export const isPlatformAdmin = (userId: number) => env.platformAdminUserIds.includes(userId);
+/*
+ * The FixFlow Console: for the people who run FixFlow, not for the owner or admins of any one organization.
+ * Console admins are accounts with User.isPlatformAdmin, set only from the command line (npm run console-admin).
+ */
 
-const requirePlatformAdmin = (req: Request, _res: Response, next: NextFunction) => {
-    if (!isPlatformAdmin(getAuth(req).userId)) {
-        // 404, so the console's existence isn't advertised.
-        throw AppError.notFound();
+const adminSelect = { id: true, name: true, email: true } as const;
+
+/** Checks a console token and that the account is still an active console admin. */
+const authenticateConsole = async (req: Request, res: Response, next: NextFunction) => {
+    const header = req.headers.authorization;
+    const payload = header?.startsWith("Bearer ") ? verifyConsoleToken(header.slice("Bearer ".length).trim()) : null;
+    if (!payload) {
+        throw AppError.unauthorized("Please log in to the console");
     }
+
+    const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { isActive: true, isPlatformAdmin: true, passwordChangedAt: true },
+    });
+    const loggedOut = user?.passwordChangedAt && payload.issuedAtMs < user.passwordChangedAt.getTime();
+    if (!user || !user.isActive || !user.isPlatformAdmin || loggedOut) {
+        throw AppError.unauthorized("Please log in to the console");
+    }
+
+    res.locals.adminId = payload.userId;
     next();
 };
 
 const router = Router();
 
-router.use(authenticate, requirePlatformAdmin);
-
-/** Every organization with the numbers that show whether it is actually using FixFlow. Read-only. */
-router.get("/organizations", async (_req: Request, res: Response) => {
-    const since = new Date(Date.now() - 30 * DAY_MS);
-
-    const [organizations, recent, lastIssue, owners] = await Promise.all([
-        prisma.organization.findMany({
-            select: {
-                id: true,
-                name: true,
-                createdAt: true,
-                _count: { select: { memberships: { where: { isActive: true } }, issues: true } },
-            },
-            orderBy: { createdAt: "desc" },
-        }),
-        prisma.issue.groupBy({ by: ["orgId"], where: { createdAt: { gte: since } }, _count: { _all: true } }),
-        prisma.issue.groupBy({ by: ["orgId"], _max: { createdAt: true } }),
-        prisma.membership.findMany({
-            where: { role: "OWNER", isActive: true },
-            select: { orgId: true, user: { select: { email: true } } },
-            orderBy: { createdAt: "asc" },
-        }),
-    ]);
-
-    const recentByOrg = new Map(recent.map((row) => [row.orgId, row._count._all]));
-    const lastByOrg = new Map(lastIssue.map((row) => [row.orgId, row._max.createdAt]));
-    const ownerByOrg = new Map<number, string>();
-    for (const owner of owners) {
-        if (!ownerByOrg.has(owner.orgId)) ownerByOrg.set(owner.orgId, owner.user.email);
+router.post("/login", authLimiter, validate({ body: loginSchema }), async (req: Request, res: Response) => {
+    const user = await verifyCredentials(req.body.email, req.body.password);
+    if (!user.isPlatformAdmin) {
+        // Same answer as a wrong password, so the console doesn't reveal which accounts exist.
+        throw AppError.unauthorized("Invalid email or password");
     }
-
-    const rows = organizations.map((org) => ({
-        id: org.id,
-        name: org.name,
-        createdAt: org.createdAt,
-        ownerEmail: ownerByOrg.get(org.id) ?? null,
-        members: org._count.memberships,
-        issues: org._count.issues,
-        issuesLast30Days: recentByOrg.get(org.id) ?? 0,
-        lastIssueAt: lastByOrg.get(org.id) ?? null,
-    }));
-
     res.status(200).json({
         success: true,
-        data: {
-            totals: {
-                organizations: rows.length,
-                activeLast30Days: rows.filter((row) => row.issuesLast30Days > 0).length,
-                members: rows.reduce((sum, row) => sum + row.members, 0),
-                issues: rows.reduce((sum, row) => sum + row.issues, 0),
-            },
-            organizations: rows,
-        },
+        data: { token: generateConsoleToken(user.id), admin: { id: user.id, name: user.name, email: user.email } },
     });
+});
+
+router.use(authenticateConsole);
+
+router.get("/me", async (_req: Request, res: Response) => {
+    const admin = await prisma.user.findUniqueOrThrow({ where: { id: res.locals.adminId as number }, select: adminSelect });
+    res.status(200).json({ success: true, data: admin });
+});
+
+router.get("/overview", async (_req: Request, res: Response) => {
+    res.status(200).json({ success: true, data: await getOverview() });
+});
+
+router.get("/organizations", async (_req: Request, res: Response) => {
+    res.status(200).json({ success: true, data: { organizations: await listOrganizationRows() } });
+});
+
+const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/**
+ * One change to an organization's plan or notice. Every action takes a note; the note stays in the console
+ * unless shareWithOwner is set, in which case the owner sees it as a notice in their portal.
+ */
+router.post(
+    "/organizations/:id/actions",
+    validate({ params: idParamSchema, body: planActionSchema }),
+    async (req: Request, res: Response) => {
+        const organization = await applyPlanAction(Number(req.params.id), res.locals.adminId as number, req.body);
+        res.status(200).json({ success: true, message: "Saved", data: organization });
+    }
+);
+
+router.get("/organizations/:id/history", validate({ params: idParamSchema }), async (req: Request, res: Response) => {
+    res.status(200).json({ success: true, data: await getPlanHistory(Number(req.params.id)) });
 });
 
 export default router;

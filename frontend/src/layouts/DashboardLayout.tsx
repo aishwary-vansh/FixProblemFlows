@@ -1,6 +1,7 @@
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import MainContent from "./MainContent";
+import OwnerNotice from "../components/OwnerNotice";
 import "./layout.css";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -15,8 +16,8 @@ const pageTitles: Record<string, string> = {
     "/admin/members": "Members",
     "/admin/locations": "Locations",
     "/admin/reports": "Reports",
+    "/admin/plan": "Plans",
     "/profile": "Profile",
-    "/platform": "Platform",
 };
 
 const DashboardLayout = () => {
@@ -54,7 +55,6 @@ const DashboardLayout = () => {
         <div className="fx-app" data-theme={theme}>
             <Sidebar
                 role={user.role}
-                isPlatformAdmin={Boolean(user.isPlatformAdmin)}
                 profile={{
                     name: user.name,
                     role: roleLabel[user.role],
@@ -76,6 +76,9 @@ const DashboardLayout = () => {
                         setTheme(theme === "dark" ? "light" : "dark")
                     }
                 />
+
+                {/* Messages from FixFlow (payment problems, plan changes) are for the owner only. */}
+                {user.role === "OWNER" && <OwnerNotice key={user.organization.id} />}
 
                 <MainContent />
             </div>

@@ -1,7 +1,7 @@
 import axios from "axios";
 import { clearSession, getToken } from "../lib/session";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:5000").replace(/\/$/, "");
+export const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:5000").replace(/\/$/, "");
 
 const api = axios.create({
     baseURL: `${API_URL}/api`,

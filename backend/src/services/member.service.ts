@@ -1,6 +1,7 @@
 import { tenantPrisma } from "../config/prisma.js";
 import { AppError } from "../utils/AppError.js";
 import { audit } from "./audit.service.js";
+import { assertCanAddMember } from "./plan.service.js";
 import type { AuthContext } from "../types/auth.js";
 import type { ListMembersQuery, UpdateMemberInput } from "../validators/member.validator.js";
 
@@ -70,6 +71,10 @@ export const updateMember = async (ctx: AuthContext, membershipId: number, input
         if (activeOwners <= 1) {
             throw AppError.conflict("An organization must keep at least one active owner");
         }
+    }
+
+    if (input.isActive === true && !target.isActive) {
+        await assertCanAddMember(ctx.orgId);
     }
 
     const nextRole = input.role ?? target.role;

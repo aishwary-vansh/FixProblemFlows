@@ -138,6 +138,8 @@ Total: about 12-15 weeks part-time.
 
 > **Reordered (2026-10-28):** billing (steps 1-7 below) now runs as Phase 7b, after AI triage and the PWA and before launch. Phase 3 keeps only the staging deploy, Sentry and legal pages (steps 8-9).
 
+> **Update (2026-11-15):** plans without payments are built. `Organization.plan` (FREE or PRO), `planEndsAt` and `planSource` (TRIAL or MANUAL) hold the plan; Pro counts until its end date, so no job is needed when it ends. Free allows 10 members and 3 QR codes, without auto-assign or CSV export; the rules are in `backend/src/domain/plans.ts`. New organizations get a 14-day Pro trial. Plans are set from the FixFlow Console (`/console`, separate login, admins made with `npm run console-admin`), which can also give a discounted price per organization; owners only see plan cards and a Buy button, and admins don't see plans at all. Razorpay is built as prepaid Pro (Orders API and Checkout, not Subscriptions, so each organization's custom price works without a Razorpay plan per price): the owner pays for a month or a year, `POST /billing/verify` and the `payment.captured` webhook both confirm it with Razorpay, and a conditional update on `Payment.status` makes the second confirmation a no-op. Still to do: live keys after KYC, and a refund policy page.
+
 **Schema:** `Subscription { orgId unique, plan: FREE|PRO|BUSINESS, status: TRIALING|ACTIVE|PAST_DUE|CANCELED, providerSubId, currentPeriodEnd, trialEndsAt }`, `BillingEvent { providerEventId unique, type, payload, processedAt }`.
 
 1. `config/plans.ts` holds the limits per plan: technicians, sites, issues/month, and feature flags (AI triage, SLA, PM, public board).

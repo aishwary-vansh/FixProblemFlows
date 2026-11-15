@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { formatIssueLocation } from "../domain/locations.js";
 import { AppError } from "../utils/AppError.js";
 import { audit } from "./audit.service.js";
+import { assertCanAddReportPoint } from "./plan.service.js";
 import type { AuthContext } from "../types/auth.js";
 import type { CreateReportPointInput } from "../validators/reportPoint.validator.js";
 
@@ -42,6 +43,7 @@ export const listReportPoints = async (ctx: AuthContext) => {
 
 /** A QR for any region the admin picks. The building or floor and the exact spot are both optional. */
 export const createReportPoint = async (ctx: AuthContext, input: CreateReportPointInput) => {
+    await assertCanAddReportPoint(ctx.orgId);
     const db = tenantPrisma(ctx.orgId);
 
     if (input.locationId) {

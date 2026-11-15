@@ -6,6 +6,7 @@ import { authorise, ADMIN_ROLES } from "../middleware/role.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
 import { exportIssuesCsv, getReport } from "../services/analytics.service.js";
 import { audit } from "../services/audit.service.js";
+import { assertFeature } from "../services/plan.service.js";
 
 const periodSchema = z.object({
     days: z.coerce.number().int().min(1).max(366).default(30),
@@ -22,6 +23,7 @@ router.get("/", validate({ query: periodSchema }), async (req: Request, res: Res
 });
 
 router.get("/export.csv", validate({ query: periodSchema }), async (req: Request, res: Response) => {
+    await assertFeature(getAuth(req).orgId, "csvExport");
     const csv = await exportIssuesCsv(getAuth(req), days(req));
     await audit(getAuth(req), "issues.exported", `Last ${days(req)} days`);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");

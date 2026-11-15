@@ -9,6 +9,9 @@ export interface ProductionSettings {
     VAPID_PUBLIC_KEY?: string | undefined;
     VAPID_PRIVATE_KEY?: string | undefined;
     RESEND_API_KEY?: string | undefined;
+    RAZORPAY_KEY_ID?: string | undefined;
+    RAZORPAY_KEY_SECRET?: string | undefined;
+    RAZORPAY_WEBHOOK_SECRET?: string | undefined;
 }
 
 const MIN_SECRET_LENGTH = 32;
@@ -50,6 +53,16 @@ export const checkProductionSettings = (settings: ProductionSettings) => {
     }
     if (!settings.RESEND_API_KEY) {
         warnings.push("RESEND_API_KEY is not set, so password reset emails will not be sent.");
+    }
+
+    if (Boolean(settings.RAZORPAY_KEY_ID) !== Boolean(settings.RAZORPAY_KEY_SECRET)) {
+        errors.push("Set both RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET, or neither.");
+    }
+    if (settings.RAZORPAY_KEY_ID && !settings.RAZORPAY_WEBHOOK_SECRET) {
+        warnings.push("RAZORPAY_WEBHOOK_SECRET is not set, so a payment only counts if the owner's browser reports it back.");
+    }
+    if (settings.RAZORPAY_KEY_ID?.startsWith("rzp_test_")) {
+        warnings.push("Razorpay is in test mode (rzp_test_ key), so no real money is taken.");
     }
 
     return { errors, warnings };

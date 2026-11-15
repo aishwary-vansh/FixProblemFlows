@@ -3,10 +3,12 @@ import { Sun, Moon } from 'lucide-react';
 interface TopbarProps {
     title: string,
     theme: "dark" | "light";
-    onThemeToggle: () => void
+    onThemeToggle: () => void;
+    /** The FixFlow Console has no organization, so no notification bell. */
+    showNotifications?: boolean;
 }
 
-const Topbar = ({ title, theme, onThemeToggle }: TopbarProps) => {
+const Topbar = ({ title, theme, onThemeToggle, showNotifications = true }: TopbarProps) => {
     return (
         <header className='fx-topbar'>
             <h1 className='fx-title'>{title}</h1>
@@ -21,7 +23,7 @@ const Topbar = ({ title, theme, onThemeToggle }: TopbarProps) => {
                     {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
                 {/* Last item in the bar, so its dropdown opens at the right edge. */}
-                <NotificationBell />
+                {showNotifications && <NotificationBell />}
             </div>
         </header>
     );

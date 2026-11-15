@@ -16,7 +16,16 @@ import { getDueAt, SLA_OPEN_STATUSES } from "../src/domain/sla.js";
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
 
 const DEMO_PASSWORD = "Demo@1234";
-const ORG = { name: "Sunrise Hostel (Demo)", slug: "sunrise-demo", joinCode: "sunrise-demo-join-link" };
+// The demo is on Pro with no end date, so every feature can be tried.
+const ORG = {
+    name: "Sunrise Hostel (Demo)",
+    slug: "sunrise-demo",
+    joinCode: "sunrise-demo-join-link",
+    plan: "PRO",
+    planSource: "MANUAL",
+    planEndsAt: null,
+    customPriceInr: null,
+} as const;
 
 const locations: { name: string; floors: string[] }[] = [
     { name: "Block A", floors: ["Ground Floor", "1st Floor", "2nd Floor", "3rd Floor"] },
@@ -66,9 +75,12 @@ async function main() {
 
     const org = await prisma.organization.upsert({
         where: { slug: ORG.slug },
-        update: { name: ORG.name, joinCode: ORG.joinCode },
+        update: { name: ORG.name, joinCode: ORG.joinCode, plan: ORG.plan, planSource: ORG.planSource, planEndsAt: ORG.planEndsAt, customPriceInr: null, noticeMessage: null, noticeLevel: null, noticeAt: null },
         create: ORG,
     });
+    // Payments and console history from earlier runs would contradict the reset plan.
+    await prisma.payment.deleteMany({ where: { orgId: org.id } });
+    await prisma.planEvent.deleteMany({ where: { orgId: org.id } });
 
     const userIds = new Map<string, number>();
     for (const person of people) {

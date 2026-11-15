@@ -6,17 +6,16 @@ import {
     LogOut,
     ClipboardList,
     MapPin,
-    Globe,
     BarChart3,
     Users,
     User,
+    CreditCard,
 } from "lucide-react";
 import type { UserRole } from "../types/issue";
 import { isAdminRole } from "../lib/session";
 
 interface SidebarProps {
     role: UserRole;
-    isPlatformAdmin: boolean;
     profile: {
         name: string;
         role: string;
@@ -28,7 +27,7 @@ interface SidebarProps {
 const linkClass = ({ isActive }: { isActive: boolean }) =>
     "fx-nav-item" + (isActive ? " active" : "");
 
-const Sidebar = ({ role, isPlatformAdmin, profile, onLogout }: SidebarProps) => {
+const Sidebar = ({ role, profile, onLogout }: SidebarProps) => {
 
     const roleItems =
         role === "TECHNICIAN"
@@ -76,6 +75,8 @@ const Sidebar = ({ role, isPlatformAdmin, profile, onLogout }: SidebarProps) => 
                         label: "Locations",
                         icon: MapPin,
                     },
+                    // Buying a plan is the owner's decision, so only the owner sees Plans.
+                    ...(role === "OWNER" ? [{ to: "/admin/plan", label: "Plans", icon: CreditCard }] : []),
                 ]
                 : [
                     {
@@ -90,9 +91,7 @@ const Sidebar = ({ role, isPlatformAdmin, profile, onLogout }: SidebarProps) => 
                     },
                 ];
 
-    const navItems = isPlatformAdmin
-        ? [...roleItems, { to: "/platform", label: "Platform", icon: Globe }]
-        : roleItems;
+    const navItems = roleItems;
 
     return (
         <aside className="fx-sidebar">

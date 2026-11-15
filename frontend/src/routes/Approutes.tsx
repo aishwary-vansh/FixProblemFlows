@@ -16,8 +16,11 @@ import Members from "../pages/Members";
 import Locations from "../pages/Locations";
 import Analytics from "../pages/Analytics";
 import Profile from "../pages/Profile";
-import Platform from "../pages/Platform";
-import { getSessionUser } from "../lib/session";
+import BillingPage from "../pages/Billing";
+import ConsoleLogin from "../pages/console/ConsoleLogin";
+import ConsoleLayout from "../layouts/ConsoleLayout";
+import ConsoleOverview from "../pages/console/ConsoleOverview";
+import ConsoleOrganizations from "../pages/console/ConsoleOrganizations";
 import { RequireRole } from "./RequireRole";
 
 const AppRoutes = () => {
@@ -31,6 +34,12 @@ const AppRoutes = () => {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/r/:code" element={<ReportPointLanding />} />
+            {/* The FixFlow Console, for the people who run FixFlow. Separate login, not tied to any organization. */}
+            <Route path="/console/login" element={<ConsoleLogin />} />
+            <Route path="/console" element={<ConsoleLayout />}>
+                <Route index element={<ConsoleOverview />} />
+                <Route path="organizations" element={<ConsoleOrganizations />} />
+            </Route>
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
 
@@ -52,11 +61,11 @@ const AppRoutes = () => {
                     path="/admin/locations"
                     element={<RequireRole roles={["OWNER", "ADMIN"]}><Locations /></RequireRole>}
                 />
-                <Route path="/profile" element={<Profile />} />
                 <Route
-                    path="/platform"
-                    element={getSessionUser()?.isPlatformAdmin ? <Platform /> : <Navigate to="/dashboard" replace />}
+                    path="/admin/plan"
+                    element={<RequireRole roles={["OWNER"]}><BillingPage /></RequireRole>}
                 />
+                <Route path="/profile" element={<Profile />} />
                 <Route
                     path="/admin/reports"
                     element={<RequireRole roles={["OWNER", "ADMIN"]}><Analytics /></RequireRole>}

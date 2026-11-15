@@ -5,6 +5,7 @@ import { AppError } from "../utils/AppError.js";
 import { hashPassword } from "../utils/password.js";
 import { buildSession, verifyCredentials } from "./auth.services.js";
 import { audit } from "./audit.service.js";
+import { assertCanAddMember } from "./plan.service.js";
 import type { AuthContext } from "../types/auth.js";
 import type { AcceptInviteInput, CreateInviteInput } from "../validators/member.validator.js";
 
@@ -27,6 +28,7 @@ export const createInvite = async (ctx: AuthContext, input: CreateInviteInput) =
     if (input.role === "ADMIN" && ctx.role !== "OWNER") {
         throw AppError.forbidden("Only the owner can invite admins");
     }
+    await assertCanAddMember(ctx.orgId);
 
     const db = tenantPrisma(ctx.orgId);
 
@@ -157,6 +159,7 @@ export const acceptInvite = async (token: string, input: AcceptInviteInput) => {
     }
 
     const { userId, passwordHash } = await resolveAccount(input);
+    await assertCanAddMember(invite.orgId);
 
     const memberUserId = await prisma.$transaction(async (tx) => {
         // Claim the invite atomically so two people can't redeem the same link.
@@ -225,6 +228,14 @@ export const getJoinPreview = async (code: string) => {
 export const joinOrganization = async (code: string, input: AcceptInviteInput) => {
     const organization = await findJoinOrganization(code);
     const { userId, passwordHash } = await resolveAccount(input);
+
+    // Someone who is already a member is only logged in, so the member limit applies to newcomers only.
+    const alreadyMember =
+        userId !== undefined &&
+        (await prisma.membership.findUnique({ where: { orgId_userId: { orgId: organization.id, userId } } })) !== null;
+    if (!alreadyMember) {
+        await assertCanAddMember(organization.id);
+    }
 
     const memberUserId = await prisma.$transaction(async (tx) => {
         const id = userId ?? (await createAccount(tx, input, passwordHash!));

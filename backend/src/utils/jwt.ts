@@ -36,3 +36,30 @@ export const verifyToken = (token: string): VerifiedToken | null => {
         return null;
     }
 };
+
+/*
+ * FixFlow Console tokens are for the people who run FixFlow, not for any organization. They carry
+ * `scope: "console"` and no orgId, so the organization API rejects them and the console rejects org tokens.
+ */
+const CONSOLE_SCOPE = "console";
+
+export const generateConsoleToken = (userId: number) =>
+    jwt.sign({ scope: CONSOLE_SCOPE, iatMs: Date.now() }, env.JWT_SECRET, {
+        subject: String(userId),
+        expiresIn: "12h",
+    });
+
+export const verifyConsoleToken = (token: string): { userId: number; issuedAtMs: number } | null => {
+    try {
+        const decoded = jwt.verify(token, env.JWT_SECRET);
+        if (typeof decoded === "string" || decoded.scope !== CONSOLE_SCOPE) return null;
+
+        const userId = Number(decoded.sub);
+        const issuedAtMs = Number(decoded.iatMs);
+        if (!Number.isInteger(userId) || !Number.isFinite(issuedAtMs)) return null;
+
+        return { userId, issuedAtMs };
+    } catch {
+        return null;
+    }
+};

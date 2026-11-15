@@ -32,7 +32,7 @@ Create a **Web Service** from the repository with these settings:
 | Setting | Value |
 | --- | --- |
 | Root directory | `backend` |
-| Build command | `npm ci && npm run build` |
+| Build command | `npm ci --include=dev && npm run build` (with `NODE_ENV=production`, npm skips the build tools unless told to include them) |
 | Start command | `npm run start:prod` (runs migrations, then starts) |
 | Health check path | `/health` |
 
@@ -53,8 +53,9 @@ Set these environment variables:
 | `VAPID_SUBJECT` | `mailto:` plus your email |
 | `RESEND_API_KEY` | From Resend |
 | `EMAIL_FROM` | A sender on a domain you verified in Resend, such as `FixFlow <no-reply@yourdomain.com>` |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | Optional. From Razorpay, Account & Settings, API Keys. See "Payments (Razorpay)" below |
+| `RAZORPAY_WEBHOOK_SECRET` | The secret you choose when adding the Razorpay webhook |
 | `SENTRY_DSN` | Optional. From a [Sentry](https://sentry.io) Node project, to be told about server errors |
-| `PLATFORM_ADMIN_USER_IDS` | Your account id (comma-separated for several), shown on your Profile page after you sign up. These accounts see the Platform console with every organization. Ids are used, not emails, because emails are not verified |
 
 The API checks these values on startup. It refuses to start with a weak or placeholder `JWT_SECRET` or localhost URLs, and logs a warning for missing storage, push or email settings.
 
@@ -69,10 +70,25 @@ Import the repository with these settings:
 | Root directory | `frontend` |
 | Framework preset | Vite |
 | `VITE_API_URL` | The API URL from step 3, without `/api` |
-| `VITE_CONTACT_EMAIL` | Address for privacy and account requests, shown on the legal pages |
+| `VITE_CONTACT_EMAIL` | Address for privacy, account and sales requests, shown on the legal pages and behind the Buy Pro and Contact us buttons on the Plans page |
 | `VITE_SENTRY_DSN` | Optional. From a Sentry React project, to be told about errors in people's browsers |
 
 `frontend/vercel.json` sends every path to `index.html`, so links like `/join/...` and `/reset-password/...` work when opened directly.
+
+## Payments (Razorpay)
+
+Owners pay for Pro on their Plans page through Razorpay Checkout (UPI, cards, net banking): one month or one year at
+their own price (a custom price set in the console applies). Paying adds that time to their Pro end date.
+
+1. Sign up at [razorpay.com](https://razorpay.com). Test mode works at once, without KYC.
+2. In **Account & Settings > API Keys**, generate a key. Put the Key ID and Key Secret in `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` on Render.
+3. In **Account & Settings > Webhooks**, add `https://<your-api>.onrender.com/api/billing/webhook`, choose a secret, and tick
+   the **payment.captured** event. Put the same secret in `RAZORPAY_WEBHOOK_SECRET`. The webhook makes a payment count
+   even if the owner closes the tab before the page reports it.
+4. Test with the test-mode cards and UPI IDs from Razorpay's docs. The API logs a warning while a `rzp_test_` key is set.
+5. For real money, complete KYC and switch to live keys. Razorpay checks your website first: it needs Terms, Privacy,
+   a **refund and cancellation policy**, your contact details and the prices. FixFlow has Terms and Privacy; write
+   the refund policy before applying.
 
 ## 5. First run
 
@@ -80,6 +96,7 @@ Import the repository with these settings:
 2. Add buildings and floors on **Locations**.
 3. Invite technicians from **Members**, then print the join QR for residents.
 4. Test **Forgot password** with your own email, and turn on alerts from the bell menu on your phone.
+5. Make your FixFlow Console account. On your computer, in `backend`, with `DATABASE_URL` in `.env` set to the Neon connection string, run `npm run console-admin -- you@example.com`. It prints a password once. Log in at `/console` on the web app to see every organization and set plans. Use an email that is not your organization login, so the two stay separate.
 
 ## Before inviting real users
 

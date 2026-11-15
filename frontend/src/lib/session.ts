@@ -15,8 +15,6 @@ export interface SessionUser {
     role: UserRole;
     specialization: TechnicianSpecialization | null;
     organization: SessionOrganization;
-    /** Runs this FixFlow installation; sees the Platform console. */
-    isPlatformAdmin?: boolean;
 }
 
 /** What login, signup, invite acceptance and org switch return. */

@@ -41,11 +41,16 @@ const envSchema = z.object({
     RESEND_API_KEY: z.string().optional(),
     EMAIL_FROM: z.string().default("FixFlow <onboarding@resend.dev>"),
 
+    // Razorpay (online payment for Pro). Off when the key id or secret is empty; the Buy button then emails FixFlow.
+    RAZORPAY_KEY_ID: z.string().optional(),
+    RAZORPAY_KEY_SECRET: z.string().optional(),
+    // Set in the Razorpay dashboard when adding the webhook (event: payment.captured).
+    RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+    // Only changed by tests, which point it at a local fake.
+    RAZORPAY_API_URL: z.string().url().default("https://api.razorpay.com/v1"),
+
     // Sentry error tracking. Off when empty.
     SENTRY_DSN: z.string().url().optional(),
-    // Comma-separated account ids of the people who run this FixFlow installation; they see the platform console.
-    // Ids, not emails: emails aren't verified, so anyone could sign up with a listed address.
-    PLATFORM_ADMIN_USER_IDS: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -69,7 +74,4 @@ export const env = {
     PUBLIC_API_URL: parsed.data.PUBLIC_API_URL ?? `http://localhost:${parsed.data.PORT}`,
     FILE_URL_SECRET: parsed.data.FILE_URL_SECRET ?? parsed.data.JWT_SECRET,
     corsOrigins: parsed.data.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean),
-    platformAdminUserIds: parsed.data.PLATFORM_ADMIN_USER_IDS.split(",")
-        .map((id) => Number(id.trim()))
-        .filter((id) => Number.isInteger(id) && id > 0),
 };

@@ -3,6 +3,7 @@ export type ErrorCode =
     | "VALIDATION_ERROR"
     | "UNAUTHORIZED"
     | "FORBIDDEN"
+    | "PLAN_LIMIT"
     | "NOT_FOUND"
     | "CONFLICT"
     | "GONE"
@@ -40,6 +41,11 @@ export class AppError extends Error {
 
     static forbidden(message = "You don't have permission to do this") {
         return new AppError(403, "FORBIDDEN", message);
+    }
+
+    /** The organization's plan doesn't include this; the web app offers an upgrade. */
+    static planLimit(message: string) {
+        return new AppError(403, "PLAN_LIMIT", message);
     }
 
     static notFound(resource = "Resource") {

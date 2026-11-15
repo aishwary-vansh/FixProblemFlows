@@ -10,6 +10,7 @@ import { validate } from "../middleware/validate.middleware.js";
 import { deleteOrganizationSchema, updateOrganizationSchema } from "../validators/member.validator.js";
 import { audit, listAuditLog } from "../services/audit.service.js";
 import { deleteOrganization, exportOrganization } from "../services/organization.service.js";
+import { assertFeature, getBillingSummary, getNotice } from "../services/plan.service.js";
 
 const settingsSelect = { id: true, name: true, autoAssign: true, joinCode: true } as const;
 
@@ -41,6 +42,9 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 router.patch("/", validate({ body: updateOrganizationSchema }), async (req: Request, res: Response) => {
+    if (req.body.autoAssign) {
+        await assertFeature(getAuth(req).orgId, "autoAssign");
+    }
     const organization = await updateWithAudit(
         getAuth(req),
         { autoAssign: req.body.autoAssign },
@@ -62,6 +66,15 @@ router.post("/join-link", async (req: Request, res: Response) => {
 router.delete("/join-link", async (req: Request, res: Response) => {
     const organization = await updateWithAudit(getAuth(req), { joinCode: null }, "join_link.turned_off");
     res.status(200).json({ success: true, message: "Join link turned off", data: toSettingsDto(organization) });
+});
+
+// Buying a plan is the owner's decision; the plan itself is set by FixFlow (console or payment).
+router.get("/billing", authorise("OWNER"), async (req: Request, res: Response) => {
+    res.status(200).json({ success: true, data: await getBillingSummary(getAuth(req).orgId) });
+});
+
+router.get("/notice", authorise("OWNER"), async (req: Request, res: Response) => {
+    res.status(200).json({ success: true, data: await getNotice(getAuth(req).orgId) });
 });
 
 router.get("/audit-log", async (req: Request, res: Response) => {

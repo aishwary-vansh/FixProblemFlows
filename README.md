@@ -17,7 +17,8 @@ It replaces the WhatsApp group and the complaint register: nothing gets lost, ev
 - **Multi-tenant:** every organization's data is isolated at the database client level, with tests.
 - **Accounts:** invites and roles (Owner, Admin, Technician, Requester), a profile page, password change, and forgot password by email.
 - **Admin control:** an activity log of every role, invite, setting, location and QR change. Owners can export all their data as JSON or delete their organization.
-- **Platform console:** the people who run the installation see every organization and whether it is active.
+- **Plans:** Free (up to 10 members and 3 QR codes, no auto-assign or CSV export) and Pro (₹999 a month, no limits), shown to the owner as plan cards. New organizations get a 14-day Pro trial. Owners pay online through Razorpay (a month or a year, at their own price; paying adds to the end date), confirmed both from the browser and by webhook so a payment is counted once even if the tab closes. Without Razorpay keys the Buy button emails `VITE_CONTACT_EMAIL`.
+- **FixFlow Console:** a separate login at `/console` for the people who run FixFlow, not tied to any organization. Its Overview shows charts of issues per day and sign-ups per month, the plan mix, trials ending this week, the most active organizations and the ones gone quiet. Organizations has search, a plan filter and a Manage panel per organization: give Pro, extend it, set a custom (discounted) price, revoke it with a reason, or send the owner a warning or notice. Notes stay in the console unless shared; shared ones show to the owner as a banner, and a discount shows on their Plans page. Every action is kept in a history. Console admins are created only from the command line: `npm run console-admin -- you@example.com`.
 - **Operations:** CI on every push, Sentry error tracking (optional), and production refuses unsafe settings.
 
 ## Stack

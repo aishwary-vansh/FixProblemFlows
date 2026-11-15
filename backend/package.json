@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx prisma/seed.ts",
+    "console-admin": "tsx scripts/console-admin.ts",
     "db:start": "prisma dev start fixflow",
     "db:migrate": "prisma migrate deploy --config prisma7.config.ts",
     "db:generate": "prisma generate --config prisma7.config.ts",

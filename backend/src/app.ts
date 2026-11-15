@@ -15,6 +15,7 @@ import analyticsRoutes from "./routes/analytics.routes.js";
 import pushRoutes from "./routes/push.routes.js";
 import reportPointRoutes from "./routes/reportPoint.routes.js";
 import platformRoutes from "./routes/platform.routes.js";
+import billingRoutes from "./routes/billing.routes.js";
 import { inviteRoutes, joinRoutes, memberRoutes } from "./routes/member.routes.js";
 import { apiLimiter } from "./middleware/rateLimit.middleware.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.middleware.js";
@@ -38,6 +39,8 @@ app.use(
 );
 
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/health" } }));
+// Razorpay signs the exact bytes it sends, so its webhook gets the raw body (express.json then skips it).
+app.use("/api/billing/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/", (_req, res) => {
@@ -67,6 +70,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/push", pushRoutes);
 app.use("/api/report-points", reportPointRoutes);
 app.use("/api/platform", platformRoutes);
+app.use("/api/billing", billingRoutes);
 if (env.STORAGE_DRIVER === "local") {
     app.use("/api/files", fileRoutes);
 }

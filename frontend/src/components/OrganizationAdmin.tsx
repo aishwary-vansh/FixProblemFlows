@@ -27,6 +27,8 @@ const ACTION_TEXT: Record<string, string> = {
     "report_point.removed": "removed a QR code",
     "issues.exported": "exported issues to CSV",
     "organization.exported": "exported all organization data",
+    "plan.changed": "changed the plan",
+    "plan.paid": "paid for Pro",
 };
 
 const describeDetails = (details: Record<string, unknown> | null) => {

@@ -3,7 +3,7 @@ import prisma from "../config/prisma.js";
 import { hashPassword, comparePassword } from "../utils/password.js";
 import { generateToken } from "../utils/jwt.js";
 import { AppError } from "../utils/AppError.js";
-import { env } from "../config/env.js";
+import { trialEndsAt } from "../domain/plans.js";
 import type { LoginInput, RegisterInput } from "../validators/auth.validator.js";
 
 // Compared against when the email is unknown, so login takes the same time either way.
@@ -62,8 +62,6 @@ export const buildSession = async (userId: number, orgId?: number) => {
             role: active.role,
             specialization: active.specialization,
             organization: active.organization,
-            // Shows the Platform console link; the API checks again on every request.
-            isPlatformAdmin: env.platformAdminUserIds.includes(user.id),
         },
         organizations: user.memberships.map((m) => ({ ...m.organization, role: m.role })),
     };
@@ -99,7 +97,14 @@ export const registerUser = async (input: RegisterInput) => {
         });
 
         const organization = await tx.organization.create({
-            data: { name: input.organizationName, slug: slugify(input.organizationName) },
+            // Every new organization starts with a Pro trial, then drops to Free.
+            data: {
+                name: input.organizationName,
+                slug: slugify(input.organizationName),
+                plan: "PRO",
+                planSource: "TRIAL",
+                planEndsAt: trialEndsAt(),
+            },
         });
 
         await tx.membership.create({

@@ -11,6 +11,33 @@ datasource db {
 }
 
 // Role of a user inside one organization. A user can belong to several orgs.
+enum Plan {
+  FREE
+  PRO
+}
+
+// How the organization got its current plan: the signup trial, set by the people running FixFlow, or paid online.
+enum PlanSource {
+  TRIAL
+  MANUAL
+  PAID
+}
+
+enum BillingPeriod {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentStatus {
+  CREATED
+  PAID
+}
+
+enum NoticeLevel {
+  INFO
+  WARNING
+}
+
 enum OrgRole {
   OWNER
   ADMIN
@@ -64,6 +91,16 @@ model Organization {
   autoAssign Boolean @default(false)
   // Reusable public link that lets anyone join as a requester. Null means the link is off.
   joinCode  String?  @unique
+  // FREE has member and QR limits. PRO lasts until planEndsAt; null means no end date.
+  plan       Plan        @default(FREE)
+  planEndsAt DateTime?
+  planSource PlanSource?
+  // Monthly Pro price in rupees agreed with this organization (a discount). Null means the standard price.
+  customPriceInr Int?
+  // A message from FixFlow shown to the owner, e.g. a payment problem or a plan change. Null means none.
+  noticeMessage String?
+  noticeLevel   NoticeLevel?
+  noticeAt      DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -72,6 +109,8 @@ model Organization {
   locations     Location[]
   reportPoints  ReportPoint[]
   auditLogs     AuditLog[]
+  planEvents    PlanEvent[]
+  payments      Payment[]
   issues        Issue[]
   issueFollowers IssueFollower[]
   attachments   Attachment[]
@@ -84,6 +123,8 @@ model User {
   id           Int      @id @default(autoincrement())
   name         String
   email        String   @unique
+  // Runs the FixFlow Console: sees every organization and sets plans. Set only with `npm run console-admin`.
+  isPlatformAdmin Boolean @default(false)
   passwordHash String
   phone        String
   // Tokens issued before this are rejected, so a password reset logs out every device.
@@ -103,6 +144,8 @@ model User {
   followedIssues    IssueFollower[]
   passwordResets    PasswordResetToken[]
   auditLogs         AuditLog[]
+  planEvents        PlanEvent[]
+  payments          Payment[]
 }
 
 model Membership {
@@ -404,6 +447,47 @@ model AuditLog {
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   actor        User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt])
+}
+
+// What the FixFlow Console did to an organization's plan, with the console admin's note.
+// Read only by the console; the note reaches the organization only when sharedWithOwner is true.
+model PlanEvent {
+  id              Int      @id @default(autoincrement())
+  orgId           Int
+  actorId         Int?
+  // granted, extended, revoked, price_set, notice_sent or notice_cleared
+  action          String
+  // What changed, in words, e.g. "Pro until 2027-01-31".
+  summary         String
+  note            String?
+  sharedWithOwner Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt])
+}
+
+// One Razorpay checkout for Pro. Created when the owner opens checkout; PAID once Razorpay confirms the payment
+// (from the browser or the webhook, whichever comes first). The amount is fixed here, never taken from the browser.
+model Payment {
+  id                Int           @id @default(autoincrement())
+  orgId             Int
+  createdById       Int?
+  razorpayOrderId   String        @unique
+  razorpayPaymentId String?       @unique
+  amountPaise       Int
+  currency          String        @default("INR")
+  period            BillingPeriod
+  status            PaymentStatus @default(CREATED)
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([orgId, createdAt])
 }
